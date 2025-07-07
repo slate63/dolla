@@ -3,6 +3,8 @@
 # Set the timezone to New York for accurate market close time
 export TZ="America/New_York"
 
+echo "TICKER_OVERRIDE_LIST received in shell script: $TICKER_OVERRIDE_LIST" # Add this line for debugging
+
 echo "Starting script at $(date)"
 
 # Check for the RUN_IMMEDIATELY environment variable
