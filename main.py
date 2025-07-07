@@ -1,7 +1,7 @@
-import yfinance as yf
-import pandas as pd
+import yfinance as yf # Import yfinance
+import pandas as pd # Import pandas
 import os
-import pyarrow.parquet as pq
+import pyarrow.parquet as pq # Import pyarrow
 import datetime
 import requests
 import json
@@ -11,7 +11,8 @@ import argparse # Import argparse
 
 # --- Configuration ---
 SEC_TICKERS_URL = "http://sec.gov/files/company_tickers.json"
-OUTPUT_DIRECTORY = '/data/daily_ohlcv'
+# OUTPUT_DIRECTORY will now be determined at runtime, defaulting if not set
+DEFAULT_OUTPUT_DIRECTORY = 'data/daily_ohlcv' # Changed to relative path for consistency with volume mount
 GLOBAL_START_DATE = '1990-01-01' # The earliest date to consider downloading data from
 
 # Constants for random behavior (still useful for API rate limiting)
@@ -38,7 +39,7 @@ def load_and_clean_ohlcv(ticker: str,
         end=end,
         interval=interval,
         progress=False,
-        auto_adjust=False,
+        auto_adjust=False, # Keep False to get 'Dividends' and 'Stock Splits' explicitly
         group_by='column',
         threads=False
     )
@@ -60,20 +61,33 @@ def load_and_clean_ohlcv(ticker: str,
     else:
         raise ValueError(f"'date' column not found for {ticker}. Check yfinance output format.")
 
-    required = {'timestamp', 'open', 'high', 'low', 'close', 'volume'}
-    missing = required - set(df.columns)
-    if missing:
-        raise ValueError(f"Missing essential OHLCV columns for {ticker}: {missing}. Columns found: {df.columns.tolist()}")
+    # Define all required columns including dividends and stock splits
+    required_columns = {'timestamp', 'open', 'high', 'low', 'close', 'volume', 'dividends', 'stock splits'}
+    
+    # Check for missing essential OHLCV columns first
+    ohlcv_core = {'timestamp', 'open', 'high', 'low', 'close', 'volume'}
+    missing_ohlcv = ohlcv_core - set(df.columns)
+    if missing_ohlcv:
+        raise ValueError(f"Missing essential OHLCV columns for {ticker}: {missing_ohlcv}. Columns found: {df.columns.tolist()}")
+
+    # Add 'dividends' and 'stock splits' if they are not present, filling with 0.0
+    # They might not be present if no such events occurred in the downloaded period
+    if 'dividends' not in df.columns:
+        df['dividends'] = 0.0
+    if 'stock splits' not in df.columns:
+        df['stock splits'] = 0.0
 
     df['symbol'] = ticker
-    return df[['timestamp', 'symbol', 'open', 'high', 'low', 'close', 'volume']]
+    
+    # Select and return the desired columns in a specific order
+    return df[['timestamp', 'symbol', 'open', 'high', 'low', 'close', 'volume', 'dividends', 'stock splits']]
 
 
 def downcast_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     """Downcast numeric columns for memory efficiency."""
     if df.empty:
         return df
-    for col in ['open', 'high', 'low', 'close']:
+    for col in ['open', 'high', 'low', 'close', 'dividends', 'stock splits']: # Added dividends and stock splits
         df[col] = pd.to_numeric(df[col], downcast='float')
     df['volume'] = pd.to_numeric(df['volume'], downcast='integer', errors='coerce').astype('Int64')
     df['symbol'] = df['symbol'].astype('category')
@@ -150,6 +164,7 @@ def update_daily_ohlcv_all_at_once(user_ticker_list: list, output_dir: str, glob
                 continue
             
             # Only read 'timestamp' and 'symbol' for efficiency
+            # Ensure we read all relevant columns for last date determination
             df_metadata = pd.read_parquet(filepath, columns=['timestamp', 'symbol'])
             
             if not df_metadata.empty:
@@ -280,6 +295,12 @@ if __name__ == '__main__':
         type=str,
         help='Comma-separated list of tickers to fetch, overriding default and SEC tickers.'
     )
+    # Argument for output directory
+    parser.add_argument(
+        '--output-dir',
+        type=str,
+        help=f'Path to the output directory for OHLCV data. Defaults to "{DEFAULT_OUTPUT_DIRECTORY}".'
+    )
     args = parser.parse_args()
 
     override_list = None
@@ -287,10 +308,13 @@ if __name__ == '__main__':
         override_list = [ticker.strip().upper() for ticker in args.override_tickers.split(',')]
         print(f"Received override tickers from command line: {override_list}")
 
+    # Determine the output directory
+    output_directory_final = args.output_dir if args.output_dir else DEFAULT_OUTPUT_DIRECTORY
+    print(f"Using output directory: {output_directory_final}")
+
     print(f"--- Full Update Run: Attempting to update all known tickers from their last recorded date or {GLOBAL_START_DATE} ---")
-    # Pass an empty list for user_ticker_list if no override is provided,
-    # as the SEC tickers will be fetched if override_ticker_list is None.
-    update_daily_ohlcv_all_at_once([], OUTPUT_DIRECTORY, GLOBAL_START_DATE, override_ticker_list=override_list)
+    # Pass an empty list for user_ticker_list as it's now primarily driven by override or SEC
+    update_daily_ohlcv_all_at_once([], output_directory_final, GLOBAL_START_DATE, override_ticker_list=override_list)
 
     print("\n--- Update complete ---")
-    print(f"Data saved to: {OUTPUT_DIRECTORY}")
+    print(f"Data saved to: {output_directory_final}")
