@@ -12,7 +12,7 @@ import argparse # Import argparse
 # --- Configuration ---
 SEC_TICKERS_URL = "http://sec.gov/files/company_tickers.json"
 # OUTPUT_DIRECTORY will now be determined at runtime, defaulting if not set
-DEFAULT_OUTPUT_DIRECTORY = 'data/daily_ohlcv' # Changed to relative path for consistency with volume mount
+DEFAULT_OUTPUT_DIRECTORY = '/data/daily_ohlcv' # Changed to relative path for consistency with volume mount
 GLOBAL_START_DATE = '1990-01-01' # The earliest date to consider downloading data from
 
 # Constants for random behavior (still useful for API rate limiting)
