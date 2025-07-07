@@ -11,7 +11,7 @@ echo "Starting script at $(date)"
 # If set to "true" (or any non-empty value), bypass all time checks and run immediately.
 if [ "$RUN_IMMEDIATELY" = "true" ]; then
     echo "RUN_IMMEDIATELY is set to true. Running the script now, bypassing time checks."
-    python /app/main.py
+    python /app/main.py --override-tickers $TICKER_OVERRIDE_LIST
     echo "Script finished (immediate run) at $(date)"
     exit 0 # Exit after immediate run
 fi
