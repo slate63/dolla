@@ -11,6 +11,7 @@ import argparse
 
 # --- Configuration ---
 SEC_TICKERS_URL = "http://sec.gov/files/company_tickers.json"
+LOCAL_TICKERS_FILE = "company_tickers.json" # New constant for local file
 DEFAULT_OUTPUT_DIRECTORY = '/data/daily_ohlcv'
 GLOBAL_START_DATE = '1990-01-01'
 
@@ -76,23 +77,36 @@ def downcast_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def get_sec_tickers(url: str) -> list:
+def get_sec_tickers(url: str, local_file: str) -> list: # Added local_file parameter
     print(f"Attempting to fetch tickers from SEC: {url}")
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36'}
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         data = response.json()
+        print("Successfully fetched tickers from SEC online.")
         return [v.get('ticker').upper() for v in data.values() if v.get('ticker')]
     except Exception as e:
-        print(f"Failed to fetch SEC tickers: {e}")
-        return []
+        print(f"Failed to fetch SEC tickers from online source ({e}). Attempting to load from local file: {local_file}")
+        if os.path.exists(local_file):
+            try:
+                with open(local_file, 'r') as f:
+                    data = json.load(f)
+                print(f"Successfully loaded tickers from local file: {local_file}")
+                return [v.get('ticker').upper() for v in data.values() if v.get('ticker')]
+            except Exception as e:
+                print(f"Failed to load tickers from local file {local_file}: {e}")
+                return []
+        else:
+            print(f"Local ticker file not found: {local_file}")
+            return []
 
 
 def update_daily_ohlcv_all_at_once(user_ticker_list, output_dir, global_start_date, override_ticker_list=None):
     os.makedirs(output_dir, exist_ok=True)
     
-    tickers = sorted(set(override_ticker_list if override_ticker_list else user_ticker_list + get_sec_tickers(SEC_TICKERS_URL)))
+    # Pass LOCAL_TICKERS_FILE to get_sec_tickers
+    tickers = sorted(set(override_ticker_list if override_ticker_list else user_ticker_list + get_sec_tickers(SEC_TICKERS_URL, LOCAL_TICKERS_FILE)))
     if not tickers:
         print("No tickers to process. Exiting.")
         return

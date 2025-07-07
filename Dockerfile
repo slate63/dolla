@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the Python script and the shell script into the container
 COPY main.py .
 COPY run_script.sh .
+COPY company_tickers.json .
 
 # Give execute permissions to the shell script
 RUN chmod +x run_script.sh
