@@ -7,6 +7,7 @@ import requests
 import json
 import time
 import random
+import argparse # Import argparse
 
 # --- Configuration ---
 SEC_TICKERS_URL = "http://sec.gov/files/company_tickers.json"
@@ -83,7 +84,7 @@ def get_sec_tickers(url: str) -> list:
     """Fetches and parses the SEC company_tickers.json list."""
     print(f"Attempting to fetch tickers from SEC: {url}")
     try:
-        headers = {'User-Agent': 'StockDataLoader/1.0 (contact@example.com)'} 
+        headers = {'User-Agent': 'StockDataLoader/1.0 (contact@example.com)'}
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         
@@ -110,15 +111,20 @@ def get_sec_tickers(url: str) -> list:
 
 # --- Main processing: Update all tickers at once ---
 
-def update_daily_ohlcv_all_at_once(user_ticker_list: list, output_dir: str, global_start_date: str):
+def update_daily_ohlcv_all_at_once(user_ticker_list: list, output_dir: str, global_start_date: str, override_ticker_list: list = None):
     os.makedirs(output_dir, exist_ok=True)
     
-    sec_tickers = get_sec_tickers(SEC_TICKERS_URL)
-    
-    combined_tickers = sorted(list(set(user_ticker_list + sec_tickers)))
+    if override_ticker_list:
+        print(f"Override list provided. Processing only these tickers: {override_ticker_list}")
+        combined_tickers = sorted(list(set(override_ticker_list)))
+    else:
+        # If no override, use the user_ticker_list (which will be empty if not passed via CLI)
+        # and combine with SEC tickers.
+        sec_tickers = get_sec_tickers(SEC_TICKERS_URL)
+        combined_tickers = sorted(list(set(user_ticker_list + sec_tickers)))
     
     if not combined_tickers:
-        print("No tickers to process (user list and SEC list are empty or failed to fetch). Exiting.")
+        print("No tickers to process (user list, SEC list, and override list are empty or failed to fetch). Exiting.")
         return
 
     print(f"\nProcessing a total of {len(combined_tickers)} unique tickers from combined list.")
@@ -267,10 +273,24 @@ def update_daily_ohlcv_all_at_once(user_ticker_list: list, output_dir: str, glob
 
 # Example usage
 if __name__ == '__main__':
-    my_favorite_tickers = ['AAPL', 'MSFT', 'TSLA', 'GOOGL', 'SPY', 'VOO', 'SMCI', 'AMZN', 'NVDA', 'AMD', 'NFLX']
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="Download daily OHLCV stock data.")
+    parser.add_argument(
+        '--override-tickers',
+        type=str,
+        help='Comma-separated list of tickers to fetch, overriding default and SEC tickers.'
+    )
+    args = parser.parse_args()
+
+    override_list = None
+    if args.override_tickers:
+        override_list = [ticker.strip().upper() for ticker in args.override_tickers.split(',')]
+        print(f"Received override tickers from command line: {override_list}")
 
     print(f"--- Full Update Run: Attempting to update all known tickers from their last recorded date or {GLOBAL_START_DATE} ---")
-    update_daily_ohlcv_all_at_once(my_favorite_tickers, OUTPUT_DIRECTORY, GLOBAL_START_DATE)
+    # Pass an empty list for user_ticker_list if no override is provided,
+    # as the SEC tickers will be fetched if override_ticker_list is None.
+    update_daily_ohlcv_all_at_once([], OUTPUT_DIRECTORY, GLOBAL_START_DATE, override_ticker_list=override_list)
 
     print("\n--- Update complete ---")
     print(f"Data saved to: {OUTPUT_DIRECTORY}")
