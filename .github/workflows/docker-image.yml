@@ -1,0 +1,39 @@
+# .github/workflows/docker-build-push.yml
+
+name: Docker Build and Push
+
+on:
+  push:
+    branches:
+      - main # Trigger this workflow when changes are pushed to the 'main' branch
+
+jobs:
+  build_and_push:
+    runs-on: ubuntu-latest # Use the latest Ubuntu runner
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4 # Action to check out your repository code
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3 # Action to set up Docker Buildx, which provides enhanced build capabilities
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3 # Action to log in to Docker Hub
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }} # Your Docker Hub username (stored as a GitHub Secret)
+          password: ${{ secrets.DOCKER_TOKEN }}    # Your Docker Hub Access Token (stored as a GitHub Secret)
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5 # Action to build and push Docker images
+        with:
+          context: . # Build context is the current directory (where your Dockerfile is)
+          push: true # Enable pushing the image to the registry
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/stock-data-updater:latest # Tag with 'latest'
+            ${{ secrets.DOCKER_USERNAME }}/stock-data-updater:${{ github.sha }} # Tag with the commit SHA for versioning
+          # You can add build-args here if your Dockerfile uses them, e.g.:
+          # build-args: |
+          #   MY_ARG=value
+          cache-from: type=gha # Use GitHub Actions cache for faster builds
+          cache-to: type=gha,mode=max # Store build cache in GitHub Actions cache
