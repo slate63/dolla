@@ -98,7 +98,7 @@ def get_sec_tickers(url: str) -> list:
     """Fetches and parses the SEC company_tickers.json list."""
     print(f"Attempting to fetch tickers from SEC: {url}")
     try:
-        headers = {'User-Agent': 'StockDataLoader/1.0 (contact@example.com)'}
+        headers = {'User-Agent': 'Dolla'}
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         
