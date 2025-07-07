@@ -5,6 +5,15 @@ export TZ="America/New_York"
 
 echo "Starting script at $(date)"
 
+# Check for the RUN_IMMEDIATELY environment variable
+# If set to "true" (or any non-empty value), bypass all time checks and run immediately.
+if [ "$RUN_IMMEDIATELY" = "true" ]; then
+    echo "RUN_IMMEDIATELY is set to true. Running the script now, bypassing time checks."
+    python /app/main.py
+    echo "Script finished (immediate run) at $(date)"
+    exit 0 # Exit after immediate run
+fi
+
 # Get the current day of the week (1=Monday, 7=Sunday)
 DAY_OF_WEEK=$(date +%u)
 
@@ -22,10 +31,6 @@ RUN_MINUTE=30 # 30 minutes after 4 PM
 # Check if it's a weekday (Monday=1 to Friday=5)
 if (( DAY_OF_WEEK >= 1 && DAY_OF_WEEK <= 5 )); then
     echo "It's a weekday."
-    # Check if the current time is after the desired run time (16:30 EST)
-    # And also check if we are *not* past midnight of the same day.
-    # This prevents the script from running repeatedly if the container restarts after 4:30 PM but before midnight.
-
     # Calculate current time in minutes since midnight
     CURRENT_TIME_IN_MINUTES=$(( CURRENT_HOUR * 60 + CURRENT_MINUTE ))
     # Calculate target run time in minutes since midnight
@@ -37,7 +42,6 @@ if (( DAY_OF_WEEK >= 1 && DAY_OF_WEEK <= 5 )); then
     else
         echo "It's before 4:30 PM EST. Waiting until 4:30 PM EST."
         # Calculate time to wait in seconds
-        # First, calculate minutes to wait
         MINUTES_TO_WAIT=$(( TARGET_TIME_IN_MINUTES - CURRENT_TIME_IN_MINUTES ))
         SECONDS_TO_WAIT=$(( MINUTES_TO_WAIT * 60 ))
 
