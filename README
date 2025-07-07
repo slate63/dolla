@@ -1,0 +1,2 @@
+Stock Data Updater
+This project provides a robust solution for automatically downloading historical OHLCV (Open, High, Low, Close, Volume) stock data from Yahoo Finance and SEC company tickers. The data is stored efficiently in Parquet files, organized by date, and the entire process is containerized using Docker for easy deployment and scheduled execution.
