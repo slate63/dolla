@@ -24,9 +24,9 @@ while true; do
     CURRENT_HOUR=$(date +%H)
     CURRENT_MINUTE=$(date +%M)
 
-    # Define run time (4:30 PM EST)
+    # Define run time (4:45 PM EST)
     RUN_HOUR=16
-    RUN_MINUTE=30
+    RUN_MINUTE=45
 
     if (( 10#$DAY_OF_WEEK >= 1 && 10#$DAY_OF_WEEK <= 5 )); then
         echo "It's a weekday. Checking time..."
@@ -35,7 +35,7 @@ while true; do
         TARGET_TIME_IN_MINUTES=$(( RUN_HOUR * 60 + RUN_MINUTE ))
 
         if (( CURRENT_TIME_IN_MINUTES >= TARGET_TIME_IN_MINUTES )); then
-            echo "It's past 4:30 PM EST. Running the script now."
+            echo "It's past 4:45 PM EST. Running the script now."
             python /app/main.py
             echo "Scheduled run complete at $(date)"
 
