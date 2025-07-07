@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import argparse
+from tqdm import tqdm  # Make sure to install with: pip install tqdm
 
 def scan_for_splits(data_dir: str, ticker_filter: str = None):
     if not os.path.exists(data_dir):
@@ -15,7 +16,7 @@ def scan_for_splits(data_dir: str, ticker_filter: str = None):
 
     print(f"Scanning {len(files)} files in '{data_dir}' for stock splits...")
 
-    for file in files:
+    for file in tqdm(files, desc="Scanning files"):
         path = os.path.join(data_dir, file)
         try:
             df = pd.read_parquet(path, columns=['timestamp', 'symbol', 'stock splits'])

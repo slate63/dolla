@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import argparse
-from tqdm import tqdm  # Make sure to install with: pip install tqdm
+from tqdm import tqdm  # pip install tqdm
 
 def scan_for_dividends(data_dir: str, ticker_filter: str = None):
     if not os.path.exists(data_dir):
@@ -16,6 +16,8 @@ def scan_for_dividends(data_dir: str, ticker_filter: str = None):
 
     print(f"Scanning {len(files)} files in '{data_dir}' for dividends...")
 
+    results = []
+
     for file in tqdm(files, desc="Scanning files"):
         path = os.path.join(data_dir, file)
         try:
@@ -24,14 +26,21 @@ def scan_for_dividends(data_dir: str, ticker_filter: str = None):
                 df = df[df['symbol'] == ticker_filter.upper()]
             df = df[df['dividends'] != 0]
             if not df.empty:
-                print(f"\n--- Dividends in {file} ---")
-                print(df)
+                df['file'] = file  # Track which file the data came from
+                results.append(df)
                 total_dividends += len(df)
         except Exception as e:
             print(f"Failed to read {file}: {e}")
 
     print(f"\nScan complete. Found {total_dividends} dividend record(s).")
 
+    if results:
+        final_df = pd.concat(results, ignore_index=True)
+        final_df = final_df[['timestamp', 'symbol', 'dividends', 'file']]
+        print("\n--- Dividend Summary ---")
+        print(final_df.to_string(index=False))
+    else:
+        print("No dividend records found.")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Scan OHLCV Parquet files for dividend data.")
