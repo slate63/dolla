@@ -30,8 +30,8 @@ jobs:
           context: . # Build context is the current directory (where your Dockerfile is)
           push: true # Enable pushing the image to the registry
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/stock-data-updater:latest
-            ${{ secrets.DOCKER_USERNAME }}/stock-data-updater:${{ github.sha }}
+            ${{ secrets.DOCKER_USERNAME }}/dolla:latest
+            ${{ secrets.DOCKER_USERNAME }}/dolla:${{ github.sha }}
           # You can add build-args here if your Dockerfile uses them, e.g.:
           # build-args: |
           #   MY_ARG=value
