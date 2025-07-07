@@ -1,30 +1,30 @@
-import yfinance as yf  # Import yfinance
-import pandas as pd  # Import pandas
+import yfinance as yf
+import pandas as pd
 import os
-import pyarrow.parquet as pq  # Import pyarrow
+import pyarrow.parquet as pq
 import datetime
 import requests
 import json
 import time
 import random
-import argparse  # Import argparse
+import argparse
 
 # --- Configuration ---
 SEC_TICKERS_URL = "http://sec.gov/files/company_tickers.json"
-DEFAULT_OUTPUT_DIRECTORY = '/data/daily_ohlcv'  # Default output path
-GLOBAL_START_DATE = '1990-01-01'  # Earliest date to fetch data
+DEFAULT_OUTPUT_DIRECTORY = '/data/daily_ohlcv'
+GLOBAL_START_DATE = '1990-01-01'
 
-# Constants for throttling
 MIN_FETCH_DELAY_SECONDS = 15
 MAX_FETCH_DELAY_SECONDS = 30
 STOCKS_PER_BUNCH = 10
 
-# --- 1. Download, clean, and downcast functions ---
+
 def load_and_clean_ohlcv(ticker: str,
                          start: str,
                          end: str = datetime.datetime.now().strftime('%Y-%m-%d'),
                          interval: str = '1d') -> pd.DataFrame:
     """Download OHLCV including dividends and splits from Yahoo via ticker.history()."""
+    
     if datetime.datetime.strptime(start, '%Y-%m-%d') > datetime.datetime.strptime(end, '%Y-%m-%d'):
         print(f"Warning: Start date {start} is after end date {end} for {ticker}. Returning empty DataFrame.")
         return pd.DataFrame()
@@ -41,6 +41,7 @@ def load_and_clean_ohlcv(ticker: str,
         return pd.DataFrame()
 
     df.reset_index(inplace=True)
+
     df.columns = [str(col).strip().lower() for col in df.columns]
 
     if 'date' in df.columns:
@@ -64,6 +65,7 @@ def load_and_clean_ohlcv(ticker: str,
 
     return df[required_columns]
 
+
 def downcast_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
@@ -72,6 +74,7 @@ def downcast_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     df['volume'] = pd.to_numeric(df['volume'], downcast='integer', errors='coerce').astype('Int64')
     df['symbol'] = df['symbol'].astype('category')
     return df
+
 
 def get_sec_tickers(url: str) -> list:
     print(f"Attempting to fetch tickers from SEC: {url}")
@@ -84,6 +87,7 @@ def get_sec_tickers(url: str) -> list:
     except Exception as e:
         print(f"Failed to fetch SEC tickers: {e}")
         return []
+
 
 def update_daily_ohlcv_all_at_once(user_ticker_list, output_dir, global_start_date, override_ticker_list=None):
     os.makedirs(output_dir, exist_ok=True)
@@ -167,6 +171,7 @@ def update_daily_ohlcv_all_at_once(user_ticker_list, output_dir, global_start_da
         elif os.path.exists(path):
             os.remove(path)
             print(f"Removed empty {path}.")
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Download daily OHLCV stock data with dividends and splits.")
