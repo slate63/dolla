@@ -4,9 +4,10 @@ on:
   push:
     branches:
       - main
-      - semistable      # Add semistable branch here
+      - semistable
+      - '**'         # Optional: catch all branches if desired
     tags:
-      - '*'             # Trigger on all tags
+      - '*'          # Trigger on all tags
 
 permissions:
   contents: read
@@ -28,28 +29,26 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
-      - name: Determine additional tag
+      - name: Determine Docker tags
         id: vars
         run: |
           DOCKER_USER=${{ secrets.DOCKER_USERNAME }}
-          TAG_LIST=""
-          IS_TAG=false
+          TAGS=""
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          SHA_TAG="${DOCKER_USER}/dolla:${GITHUB_SHA}"
 
-          if [[ "${GITHUB_REF}" == refs/heads/main ]]; then
-            TAG_LIST="${DOCKER_USER}/dolla:latest,${DOCKER_USER}/dolla:${GITHUB_SHA}"
-          elif [[ "${GITHUB_REF}" == refs/heads/semistable ]]; then
-            # For semistable branch, push with semistable tag and SHA tag
-            TAG_LIST="${DOCKER_USER}/dolla:semistable,${DOCKER_USER}/dolla:${GITHUB_SHA}"
-          elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            TAG_LIST="${DOCKER_USER}/dolla:latest,${DOCKER_USER}/dolla:${GITHUB_SHA},${DOCKER_USER}/dolla:semistable"
-            IS_TAG=true
+          if [[ "$GITHUB_REF" == refs/heads/main ]]; then
+            TAGS="${DOCKER_USER}/dolla:latest,${DOCKER_USER}/dolla:main,${SHA_TAG}"
+          elif [[ "$GITHUB_REF" == refs/heads/* ]]; then
+            TAGS="${DOCKER_USER}/dolla:${BRANCH},${SHA_TAG}"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+            TAGS="${DOCKER_USER}/dolla:${TAG_NAME},${SHA_TAG}"
           else
-            # fallback, just use SHA tag
-            TAG_LIST="${DOCKER_USER}/dolla:${GITHUB_SHA}"
+            TAGS="${SHA_TAG}"
           fi
 
-          echo "tag_list=$TAG_LIST" >> $GITHUB_OUTPUT
-          echo "is_tag=$IS_TAG" >> $GITHUB_OUTPUT
+          echo "tag_list=$TAGS" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
