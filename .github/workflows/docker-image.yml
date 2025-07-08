@@ -34,6 +34,8 @@ jobs:
     needs: codeql
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/semistable'
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
