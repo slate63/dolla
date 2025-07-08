@@ -1,48 +1,62 @@
-name: Docker Build and Push
+name: Secure Docker Build and Push
 
 on:
   push:
     branches:
       - main
-    tags:
-      - '*'  # Trigger on tags like v1.0.0, v2.3.4
-
-permissions:
-  contents: read
+      - semistable
 
 jobs:
-  build_and_push:
+  codeql:
+    name: CodeQL Analysis
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python  # adjust if needed
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+  docker:
+    name: Build and Push Docker Image
+    needs: codeql
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/semistable'
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Determine additional tag
-        id: vars
+      - name: Build Docker image
         run: |
-          echo "tag_list=${{ secrets.DOCKER_USERNAME }}/dolla:latest,${{ secrets.DOCKER_USERNAME }}/dolla:${GITHUB_SHA}" >> $GITHUB_OUTPUT
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            echo "is_tag=true" >> $GITHUB_OUTPUT
-            echo "tag_list=${{ secrets.DOCKER_USERNAME }}/dolla:latest,${{ secrets.DOCKER_USERNAME }}/dolla:${GITHUB_SHA},${{ secrets.DOCKER_USERNAME }}/dolla:semistable" >> $GITHUB_OUTPUT
-          else
-            echo "is_tag=false" >> $GITHUB_OUTPUT
-          fi
+          docker build -t myimage:tmp .
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.vars.outputs.tag_list }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Tag & Push Docker image
+        env:
+          IMAGE=mydockerhubuser/myimage
+        run: |
+          if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+            echo "Tagging as latest"
+            docker tag myimage:tmp $IMAGE:latest
+            docker push $IMAGE:latest
+          elif [[ "${GITHUB_REF}" == "refs/heads/semistable" ]]; then
+            echo "Tagging as semistable"
+            docker tag myimage:tmp $IMAGE:semistable
+            docker push $IMAGE:semistable
+          fi
