@@ -4,8 +4,9 @@ on:
   push:
     branches:
       - main
+      - semistable      # Add semistable branch here
     tags:
-      - '*'  # Trigger on tags like v1.0.0, v2.3.4
+      - '*'             # Trigger on all tags
 
 permissions:
   contents: read
@@ -30,13 +31,25 @@ jobs:
       - name: Determine additional tag
         id: vars
         run: |
-          echo "tag_list=${{ secrets.DOCKER_USERNAME }}/dolla:latest,${{ secrets.DOCKER_USERNAME }}/dolla:${GITHUB_SHA}" >> $GITHUB_OUTPUT
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            echo "is_tag=true" >> $GITHUB_OUTPUT
-            echo "tag_list=${{ secrets.DOCKER_USERNAME }}/dolla:latest,${{ secrets.DOCKER_USERNAME }}/dolla:${GITHUB_SHA},${{ secrets.DOCKER_USERNAME }}/dolla:semistable" >> $GITHUB_OUTPUT
+          DOCKER_USER=${{ secrets.DOCKER_USERNAME }}
+          TAG_LIST=""
+          IS_TAG=false
+
+          if [[ "${GITHUB_REF}" == refs/heads/main ]]; then
+            TAG_LIST="${DOCKER_USER}/dolla:latest,${DOCKER_USER}/dolla:${GITHUB_SHA}"
+          elif [[ "${GITHUB_REF}" == refs/heads/semistable ]]; then
+            # For semistable branch, push with semistable tag and SHA tag
+            TAG_LIST="${DOCKER_USER}/dolla:semistable,${DOCKER_USER}/dolla:${GITHUB_SHA}"
+          elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG_LIST="${DOCKER_USER}/dolla:latest,${DOCKER_USER}/dolla:${GITHUB_SHA},${DOCKER_USER}/dolla:semistable"
+            IS_TAG=true
           else
-            echo "is_tag=false" >> $GITHUB_OUTPUT
+            # fallback, just use SHA tag
+            TAG_LIST="${DOCKER_USER}/dolla:${GITHUB_SHA}"
           fi
+
+          echo "tag_list=$TAG_LIST" >> $GITHUB_OUTPUT
+          echo "is_tag=$IS_TAG" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
