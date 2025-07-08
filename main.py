@@ -8,7 +8,6 @@ import json
 import time
 import random
 import argparse
-import logging
 
 # --- Configuration ---
 SEC_TICKERS_URL = "http://sec.gov/files/company_tickers.json"
@@ -20,23 +19,23 @@ MIN_FETCH_DELAY_SECONDS = 15
 MAX_FETCH_DELAY_SECONDS = 30
 STOCKS_PER_BUNCH = 10
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-def load_and_clean_ohlcv(ticker: str, start: str, end: str = datetime.datetime.now().strftime('%Y-%m-%d'), interval: str = '1d') -> pd.DataFrame:
+def load_and_clean_ohlcv(ticker: str,
+                         start: str,
+                         end: str = datetime.datetime.now().strftime('%Y-%m-%d'),
+                         interval: str = '1d') -> pd.DataFrame:
     if datetime.datetime.strptime(start, '%Y-%m-%d') > datetime.datetime.strptime(end, '%Y-%m-%d'):
-        logging.warning(f"Start date {start} is after end date {end} for {ticker}. Returning empty DataFrame.")
+        print(f"Warning: Start date {start} is after end date {end} for {ticker}. Returning empty DataFrame.")
         return pd.DataFrame()
 
     try:
         yf_ticker = yf.Ticker(ticker)
         df = yf_ticker.history(start=start, end=end, interval=interval, actions=True, auto_adjust=False)
     except Exception as e:
-        logging.error(f"Error fetching data for {ticker}: {e}")
+        print(f"Error fetching data for {ticker}: {e}")
         return pd.DataFrame()
 
     if df.empty:
-        logging.warning(f"No data returned for {ticker} within the range {start} to {end}.")
+        print(f"Warning: No data returned for {ticker} within the range {start} to {end}.")
         return pd.DataFrame()
 
     df.reset_index(inplace=True)
@@ -55,72 +54,78 @@ def load_and_clean_ohlcv(ticker: str, start: str, end: str = datetime.datetime.n
         df['stock splits'] = 0.0
 
     df['symbol'] = ticker
-    return df
 
-def add_moving_averages(df: pd.DataFrame) -> pd.DataFrame:
-    if df.empty:
-        return df
-    df = df.sort_values(by='timestamp').copy()
-    df['sma_50'] = df['close'].rolling(window=50, min_periods=1).mean()
-    df['sma_200'] = df['close'].rolling(window=200, min_periods=1).mean()
-    return df
+    # --- Add Technical Indicators ---
+    df['sma_50'] = df['close'].rolling(window=50).mean()
+    df['sma_200'] = df['close'].rolling(window=200).mean()
+    df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
+
+    required_columns = ['timestamp', 'symbol', 'open', 'high', 'low', 'close', 'volume', 
+                        'dividends', 'stock splits', 'sma_50', 'sma_200', 'ema_20']
+    missing_columns = set(required_columns) - set(df.columns)
+    if missing_columns:
+        raise ValueError(f"Missing columns for {ticker}: {missing_columns}")
+
+    return df[required_columns]
 
 def downcast_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
-    df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True)
-    for col in ['open', 'high', 'low', 'close', 'dividends', 'stock splits', 'sma_50', 'sma_200']:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], downcast='float', errors='coerce')
-    if 'volume' in df.columns:
-        df['volume'] = pd.to_numeric(df['volume'], downcast='integer', errors='coerce').astype('Int64')
-    if 'symbol' in df.columns:
-        df['symbol'] = df['symbol'].astype('category')
+    for col in ['open', 'high', 'low', 'close', 'dividends', 'stock splits', 'sma_50', 'sma_200', 'ema_20']:
+        df[col] = pd.to_numeric(df[col], downcast='float')
+    df['volume'] = pd.to_numeric(df['volume'], downcast='integer', errors='coerce').astype('Int64')
+    df['symbol'] = df['symbol'].astype('category')
     return df
 
 def get_sec_tickers(url: str, local_file: str) -> list:
-    logging.info(f"Attempting to fetch tickers from SEC: {url}")
+    print(f"Attempting to fetch tickers from SEC: {url}")
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         data = response.json()
-        logging.info("Successfully fetched tickers from SEC online.")
+        print("Successfully fetched tickers from SEC online.")
         return [v.get('ticker').upper() for v in data.values() if v.get('ticker')]
-    except requests.exceptions.RequestException as e:
-        logging.warning(f"Failed to fetch SEC tickers: {e}. Trying local file {local_file}")
+    except Exception as e:
+        print(f"Failed to fetch SEC tickers from online source ({e}). Attempting to load from local file: {local_file}")
         if os.path.exists(local_file):
             try:
                 with open(local_file, 'r') as f:
                     data = json.load(f)
+                print(f"Successfully loaded tickers from local file: {local_file}")
                 return [v.get('ticker').upper() for v in data.values() if v.get('ticker')]
             except Exception as e:
-                logging.error(f"Local file error: {e}")
+                print(f"Failed to load tickers from local file {local_file}: {e}")
                 return []
         else:
+            print(f"Local ticker file not found: {local_file}")
             return []
 
-def update_daily_ohlcv_all_at_once(user_ticker_list: list, output_dir: str, global_start_date: str, override_ticker_list: list = None):
+def update_daily_ohlcv_all_at_once(user_ticker_list, output_dir, global_start_date, override_ticker_list=None):
     os.makedirs(output_dir, exist_ok=True)
     tickers = sorted(set(override_ticker_list if override_ticker_list else user_ticker_list + get_sec_tickers(SEC_TICKERS_URL, LOCAL_TICKERS_FILE)))
     if not tickers:
-        logging.info("No tickers to process. Exiting.")
+        print("No tickers to process. Exiting.")
         return
 
-    logging.info(f"Processing {len(tickers)} tickers")
+    print(f"Processing {len(tickers)} tickers")
     ticker_last_dates = {}
     existing_files = sorted([f for f in os.listdir(output_dir) if f.endswith('.parquet')])
     today = datetime.datetime.now().date()
 
     for fname in existing_files:
-        path = os.path.join(output_dir, fname)
+        date_str = fname.replace('.parquet', '')
         try:
-            df_meta = pd.read_parquet(path, columns=['timestamp', 'symbol'])
-            for symbol, ts in df_meta.groupby('symbol')['timestamp'].max().to_dict().items():
-                if symbol not in ticker_last_dates or ts > ticker_last_dates[symbol]:
-                    ticker_last_dates[symbol] = ts
+            fdate = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+            if fdate > today:
+                continue
+            df_meta = pd.read_parquet(os.path.join(output_dir, fname), columns=['timestamp', 'symbol'])
+            if not df_meta.empty:
+                for symbol, ts in df_meta.groupby('symbol')['timestamp'].max().to_dict().items():
+                    if symbol not in ticker_last_dates or ts > ticker_last_dates[symbol]:
+                        ticker_last_dates[symbol] = ts
         except Exception as e:
-            logging.warning(f"Skipping {fname} due to error: {e}")
+            print(f"Skipping {fname}: {e}")
 
     fetch_requests = {}
     today_str = today.strftime('%Y-%m-%d')
@@ -135,54 +140,28 @@ def update_daily_ohlcv_all_at_once(user_ticker_list: list, output_dir: str, glob
 
     fetch_list = sorted([t for t, s in fetch_requests.items() if s <= today_str])
     if not fetch_list:
-        logging.info("All tickers up-to-date. Exiting.")
+        print("All tickers up-to-date. Exiting.")
         return
 
     all_data = []
     for i in range(0, len(fetch_list), STOCKS_PER_BUNCH):
         bunch = fetch_list[i:i + STOCKS_PER_BUNCH]
-        logging.info(f"\nProcessing bunch: {bunch}")
+        print(f"\nProcessing bunch: {bunch}")
         for ticker in bunch:
             try:
-                df_new = load_and_clean_ohlcv(ticker, fetch_requests[ticker], today_str)
-                if not df_new.empty:
-                    existing_df = []
-                    for fname in existing_files:
-                        path = os.path.join(output_dir, fname)
-                        try:
-                            df_existing = pd.read_parquet(path, columns=['timestamp', 'symbol', 'open', 'high', 'low', 'close', 'volume', 'dividends', 'stock splits'])
-                            df_existing = df_existing[df_existing['symbol'] == ticker]
-                            if not df_existing.empty:
-                                existing_df.append(df_existing)
-                        except:
-                            continue
-
-                    if existing_df:
-                        df_history = pd.concat(existing_df + [df_new], ignore_index=True)
-                    else:
-                        df_history = df_new
-
-                    df_history.drop_duplicates(subset=['timestamp', 'symbol'], keep='last', inplace=True)
-                    df_history = df_history.sort_values(by='timestamp')
-
-                    df_with_ma = add_moving_averages(df_history)
-                    df_with_ma = downcast_ohlcv(df_with_ma)
-                    df_to_save = df_with_ma[df_with_ma['timestamp'] >= pd.to_datetime(fetch_requests[ticker])]
-                    all_data.append(df_to_save)
+                df = load_and_clean_ohlcv(ticker, fetch_requests[ticker], today_str)
+                if not df.empty:
+                    all_data.append(downcast_ohlcv(df))
             except Exception as e:
-                logging.error(f"Failed to process {ticker}: {e}")
-
+                print(f"Failed {ticker}: {e}")
         if (i + STOCKS_PER_BUNCH) < len(fetch_list):
-            delay = random.randint(MIN_FETCH_DELAY_SECONDS, MAX_FETCH_DELAY_SECONDS)
-            logging.info(f"Pausing for {delay} seconds before next bunch...")
-            time.sleep(delay)
+            time.sleep(random.randint(MIN_FETCH_DELAY_SECONDS, MAX_FETCH_DELAY_SECONDS))
 
     if not all_data:
-        logging.info("No new data fetched. Exiting.")
+        print("No data fetched. Exiting.")
         return
 
     final_data = pd.concat(all_data, ignore_index=True)
-    final_data['timestamp'] = pd.to_datetime(final_data['timestamp'])
     final_data['date_str'] = final_data['timestamp'].dt.strftime('%Y-%m-%d')
     grouped = final_data.groupby('date_str')
 
@@ -193,30 +172,31 @@ def update_daily_ohlcv_all_at_once(user_ticker_list: list, output_dir: str, glob
             try:
                 existing = pd.read_parquet(path)
             except:
-                pass
-
+                print(f"Unable to read {path}, treating as empty.")
         combined = pd.concat([existing, group.drop(columns=['date_str'])], ignore_index=True)
         combined.drop_duplicates(subset=['timestamp', 'symbol'], keep='last', inplace=True)
-        combined = combined.sort_values(by=['timestamp', 'symbol'])
-
+        combined = combined[combined['symbol'].isin(tickers)].sort_values(by=['timestamp', 'symbol'])
         if not combined.empty:
             combined.to_parquet(path, engine='pyarrow', compression='snappy', index=False)
-            logging.info(f"Saved {path} with {len(combined)} rows.")
+            print(f"Saved {path} with {len(combined)} rows.")
         elif os.path.exists(path):
             os.remove(path)
-            logging.info(f"Removed empty {path}.")
+            print(f"Removed empty {path}.")
 
 if __name__ == '__main__':
-    def main():
-        parser = argparse.ArgumentParser(description="Download daily OHLCV stock data with dividends and splits, including moving averages.")
-        parser.add_argument('--override-tickers', type=str, help='Comma-separated list of tickers to fetch.')
-        parser.add_argument('--output-dir', type=str, help=f'Output directory. Defaults to "{DEFAULT_OUTPUT_DIRECTORY}".')
-        args = parser.parse_args()
+    parser = argparse.ArgumentParser(description="Download daily OHLCV stock data with dividends, splits, and indicators.")
+    parser.add_argument('--override-tickers', type=str, help='Comma-separated list of tickers to fetch.')
+    parser.add_argument('--output-dir', type=str, help=f'Output directory. Defaults to \"{DEFAULT_OUTPUT_DIRECTORY}\".')
+    args = parser.parse_args()
 
-        override = [t.strip().upper() for t in args.override_tickers.split(',')] if args.override_tickers else None
-        out_dir = args.output_dir if args.output_dir else DEFAULT_OUTPUT_DIRECTORY
+    override = [t.strip().upper() for t in args.override_tickers.split(',')] if args.override_tickers else None
+    out_dir = args.output_dir if args.output_dir else DEFAULT_OUTPUT_DIRECTORY
 
-        update_daily_ohlcv_all_at_once([], out_dir, GLOBAL_START_DATE, override_ticker_list=override)
-        logging.info("\n--- Update complete ---")
-
-    main()
+    # Only override_ticker_list is passed explicitly; user_ticker_list is left empty (or you can customize it)
+    update_daily_ohlcv_all_at_once(
+        user_ticker_list=[],
+        output_dir=out_dir,
+        global_start_date=GLOBAL_START_DATE,
+        override_ticker_list=override
+    )
+    print("\n--- Update complete ---")
