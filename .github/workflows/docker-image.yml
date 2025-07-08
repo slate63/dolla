@@ -21,7 +21,7 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: python  # adjust if needed
+          languages: python  # change this to match your project
 
       - name: Autobuild
         uses: github/codeql-action/autobuild@v3
@@ -48,8 +48,6 @@ jobs:
           docker build -t myimage:tmp .
 
       - name: Tag & Push Docker image
-        env:
-          IMAGE=mydockerhubuser/myimage
         run: |
           if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
             echo "Tagging as latest"
@@ -60,3 +58,5 @@ jobs:
             docker tag myimage:tmp $IMAGE:semistable
             docker push $IMAGE:semistable
           fi
+        env:
+          IMAGE: mydockerhubuser/myimage  # ✅ FIXED: define environment variable here
