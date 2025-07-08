@@ -56,12 +56,16 @@ def load_and_clean_ohlcv(ticker: str,
     df['symbol'] = ticker
 
     # --- Add Technical Indicators ---
-    df['sma_50'] = df['close'].rolling(window=50).mean()
-    df['sma_200'] = df['close'].rolling(window=200).mean()
-    df['ema_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    for period in [5, 20, 50, 100, 200]:
+        df[f'sma_{period}'] = df['close'].rolling(window=period).mean()
+    for period in [50, 100, 200]:
+        df[f'ema_{period}'] = df['close'].ewm(span=period, adjust=False).mean()
 
     required_columns = ['timestamp', 'symbol', 'open', 'high', 'low', 'close', 'volume', 
-                        'dividends', 'stock splits', 'sma_50', 'sma_200', 'ema_20']
+                        'dividends', 'stock splits'] + \
+                       [f'sma_{p}' for p in [5, 20, 50, 100, 200]] + \
+                       [f'ema_{p}' for p in [50, 100, 200]]
+
     missing_columns = set(required_columns) - set(df.columns)
     if missing_columns:
         raise ValueError(f"Missing columns for {ticker}: {missing_columns}")
@@ -71,7 +75,9 @@ def load_and_clean_ohlcv(ticker: str,
 def downcast_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
-    for col in ['open', 'high', 'low', 'close', 'dividends', 'stock splits', 'sma_50', 'sma_200', 'ema_20']:
+    for col in ['open', 'high', 'low', 'close', 'dividends', 'stock splits'] + \
+               [f'sma_{p}' for p in [5, 20, 50, 100, 200]] + \
+               [f'ema_{p}' for p in [50, 100, 200]]:
         df[col] = pd.to_numeric(df[col], downcast='float')
     df['volume'] = pd.to_numeric(df['volume'], downcast='integer', errors='coerce').astype('Int64')
     df['symbol'] = df['symbol'].astype('category')
@@ -192,11 +198,11 @@ if __name__ == '__main__':
     override = [t.strip().upper() for t in args.override_tickers.split(',')] if args.override_tickers else None
     out_dir = args.output_dir if args.output_dir else DEFAULT_OUTPUT_DIRECTORY
 
-    # Only override_ticker_list is passed explicitly; user_ticker_list is left empty (or you can customize it)
     update_daily_ohlcv_all_at_once(
         user_ticker_list=[],
         output_dir=out_dir,
         global_start_date=GLOBAL_START_DATE,
         override_ticker_list=override
     )
+
     print("\n--- Update complete ---")
