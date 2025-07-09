@@ -4,8 +4,7 @@ on:
   push:
     branches:
       - main
-      - develop
-      - 'feature/**' # Matches any branch starting with 'feature/'
+      - semistable
     tags:
       - 'v*.*.*' # Matches tags like v1.0.0, v2.1.5, etc.
 
@@ -60,9 +59,9 @@ jobs:
             TAG="latest"
             SHORT_SHA=$(git rev-parse --short HEAD)
             echo "::set-output name=extra_tag::${SHORT_SHA}"
-          elif [[ "$BRANCH_NAME" == "develop" ]]; then
+          elif [[ "$BRANCH_NAME" == "semistable" ]]; then
             # For 'develop' branch, use 'develop'
-            TAG="develop"
+            TAG="semistable"
           elif [[ "$BRANCH_NAME" == feature/* ]]; then
             # For feature branches, use a sanitized branch name
             TAG=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9._-]/-/g' | cut -c1-60 | tr A-Z a-z) # Sanitize and truncate
