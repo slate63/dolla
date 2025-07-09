@@ -3,9 +3,10 @@
 name: Docker main to Dockerhub semistable
 
 on:
-  push:
+  pull_request:
+    types: closed
     branches:
-      - semistable # Trigger this workflow when changes are pushed to the 'main' branch
+      - semistable
 
 jobs:
   build_and_push:
