@@ -38,12 +38,9 @@ jobs:
           SHA_TAG="${DOCKER_USER}/dolla:${GITHUB_SHA}"
 
           if [[ "$GITHUB_REF" == refs/heads/main ]]; then
-            TAGS="${DOCKER_USER}/dolla:latest,${DOCKER_USER}/dolla:main,${SHA_TAG}"
+            TAGS="${DOCKER_USER}/dolla:latest,${DOCKER_USER}/dolla:main"
           elif [[ "$GITHUB_REF" == refs/heads/* ]]; then
-            TAGS="${DOCKER_USER}/dolla:${BRANCH},${SHA_TAG}"
-          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            TAG_NAME="${GITHUB_REF#refs/tags/}"
-            TAGS="${DOCKER_USER}/dolla:${TAG_NAME},${SHA_TAG}"
+            TAGS="${DOCKER_USER}/dolla:${BRANCH}"
           else
             TAGS="${SHA_TAG}"
           fi
