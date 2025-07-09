@@ -5,9 +5,8 @@ on:
     branches:
       - main
       - semistable
-      - '**'         # Optional: catch all branches if desired
     tags:
-      - '*'          # Trigger on all tags
+      - '*' # Optional: if you want to build on tag push too
 
 permissions:
   contents: read
@@ -27,31 +26,23 @@ jobs:
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Determine Docker tags
+      - name: Set Docker tag based on branch
         id: vars
         run: |
-          DOCKER_USER=${{ secrets.DOCKER_USERNAME }}
-          TAGS=""
-          BRANCH="${GITHUB_REF#refs/heads/}"
-          SHA_TAG="${DOCKER_USER}/dolla:${GITHUB_SHA}"
-
-          if [[ "$GITHUB_REF" == refs/heads/main ]]; then
-            TAGS="${DOCKER_USER}/dolla:latest,${DOCKER_USER}/dolla:main"
-          elif [[ "$GITHUB_REF" == refs/heads/* ]]; then
-            TAGS="${DOCKER_USER}/dolla:${BRANCH}"
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "TAG=latest" >> $GITHUB_ENV
+          elif [[ "${{ github.ref }}" == "refs/heads/semistable" ]]; then
+            echo "TAG=semistable" >> $GITHUB_ENV
           else
-            TAGS="${SHA_TAG}"
+            echo "TAG=unknown" >> $GITHUB_ENV
+            exit 1
           fi
-
-          echo "tag_list=$TAGS" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ${{ steps.vars.outputs.tag_list }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: slate63/dolla:${{ env.TAG }}
