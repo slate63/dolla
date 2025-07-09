@@ -19,6 +19,8 @@ MIN_FETCH_DELAY_SECONDS = 15
 MAX_FETCH_DELAY_SECONDS = 30
 STOCKS_PER_BUNCH = 10
 
+#adding for traceablity
+
 def load_and_clean_ohlcv(ticker: str,
                          start: str,
                          end: str = datetime.datetime.now().strftime('%Y-%m-%d'),
